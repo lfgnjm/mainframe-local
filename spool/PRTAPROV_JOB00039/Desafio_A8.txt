@@ -1,0 +1,23 @@
+Seguem as atividades da aula 8, com prazo até *quarta, 04/11*, na aula 9:
+
+*Desafio da aula 8* (individual e para toda a turma)
+Com o FATFILTR do checkpoint 3 (ou da Atividade 2, para os alunos novos) pronto, acrescentem ao FATJCL04 o *STEP040*, que executa o FATRELAT logo depois do STEP030. O modelo está no slide 36 do PDF da aula 8 ("O step do relatório").
+
+*Entreguem:*
+• Print da primeira página do relatório
+• Print do bloco de totais (final do relatório)
+• Até 5 linhas: o que acontece se o MCC.TABELA vier fora de ordem, e como o programa poderia detectar isso
+
+*Dica:* abram o FATRELAT e procurem o parágrafo *1100-CARREGAR-MCC*, onde a tabela de MCC é carregada. É ali que dá para pensar na detecção.
+
+*Antes de entregar, confiram:*
+• O job roda do início ao fim, com RC 0 no STEP040
+• A soma dos totais por MCC bate com o total geral
+• Nenhuma linha mostra o número completo do cartão
+
+*Pesquisa*
+No PCI DSS, o padrão de segurança dos cartões, quais partes do número do cartão podem ser exibidas? O nosso relatório atende a essa regra? Vamos conversar sobre isso no início da aula 9, então não respondam aqui no grupo.
+
+Lembrete: o *checkpoint 3* agora vence na *terça, 03/11*, e não segunda. Aproveitem o prazo extra! 
+
+Se tiverem dúvidas, me chamem!

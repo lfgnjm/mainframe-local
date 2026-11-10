@@ -1,0 +1,380 @@
+SIM031I COMPILACAO COM GNUCOBOL (-std=ibm), PROGRAMA FATCONCI (PRINCIPAL)
+
+ALUNO.FATURA.COBOL(FATCONCI):291: warning: line not terminated by a newline [-Wmissing-newline]
+  289 |            STOP RUN.
+  290 |        9900-FIM-ENCERRAR-COM-ERRO.
+  291 >            EXIT.<EOF>
+
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0001
+
+LINE    PG/LN  A...B............................................................
+
+000001        *================================================================*
+000002        * PROGRAMA : FATCONCI                                            *
+000003        * AULA     : 9 - BALANCE LINE                                    *
+000004        * OBJETIVO : CRUZAR FATURAS EM ABERTO COM PAGAMENTOS DO DIA,     *
+000005        *            AMBOS ORDENADOS POR CARTAO, BAIXANDO AS FATURAS     *
+000006        *            PAGAS E GRAVANDO AS DIVERGENCIAS:                   *
+000007        *            PS = PAGAMENTO SEM FATURA                           *
+000008        *            FS = FATURA SEM PAGAMENTO                           *
+000009        *            PM = PAGAMENTO A MENOR                              *
+000010        * ENTRADAS : DD FATIN   - CPFATUR, FB 80                         *
+000011        *            DD PAGIN   - CPPAGTO, FB 80                         *
+000012        * SAIDA    : DD DIVEROUT - CPDIVER, FB 80                        *
+000013        * PREMISSA : NO MAXIMO UM PAGAMENTO E UMA FATURA POR CARTAO.     *
+000014        * ORDEM    : ENTRADAS EM ORDEM CRESCENTE DE CARTAO (VALIDADO)    *
+000015        * RC       : 0 = OK, 16 = ERRO DE ARQUIVO, CHAVE FORA DE ORDEM   *
+000016        *            OU CONTAS NAO FECHAM                                *
+000017        *================================================================*
+000018         IDENTIFICATION DIVISION.
+000019         PROGRAM-ID. FATCONCI.
+000020
+000021         ENVIRONMENT DIVISION.
+000022         INPUT-OUTPUT SECTION.
+000023         FILE-CONTROL.
+000024             SELECT FATURAS     ASSIGN TO FATIN
+000025                    FILE STATUS IS WS-FS-FATURA.
+000026             SELECT PAGAMENTOS  ASSIGN TO PAGIN
+000027                    FILE STATUS IS WS-FS-PAGTO.
+000028             SELECT DIVERGENCIAS ASSIGN TO DIVEROUT
+000029                    FILE STATUS IS WS-FS-DIVER.
+000030
+000031         DATA DIVISION.
+000032         FILE SECTION.
+000033         FD  FATURAS
+000034             RECORDING MODE IS F.
+000035             COPY CPFATUR.
+000001C       *================================================================*
+000002C       * CPFATUR  - FATURA EM ABERTO                                    *
+000003C       * LRECL 80, RECFM FB. ORDENADO POR NUMERO DO CARTAO.             *
+000004C       *================================================================*
+000005C        01  REG-FATURA.
+000006C            05  FT-NUM-CARTAO          PIC X(16).
+000007C            05  FT-DATA-VENCIMENTO     PIC 9(08).
+000008C            05  FT-VALOR               PIC 9(09)V99.
+000009C            05  FT-NOME-TITULAR        PIC X(30).
+000010C            05  FILLER                 PIC X(15).
+000036         FD  PAGAMENTOS
+000037             RECORDING MODE IS F.
+000038             COPY CPPAGTO.
+000001C       *================================================================*
+000002C       * CPPAGTO  - PAGAMENTO RECEBIDO NO DIA                           *
+000003C       * LRECL 80, RECFM FB. ORDENADO POR NUMERO DO CARTAO.             *
+000004C       *================================================================*
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0002
+
+LINE    PG/LN  A...B............................................................
+
+000005C        01  REG-PAGAMENTO.
+000006C            05  PG-NUM-CARTAO          PIC X(16).
+000007C            05  PG-DATA-PAGAMENTO      PIC 9(08).
+000008C            05  PG-VALOR               PIC 9(09)V99.
+000009C            05  FILLER                 PIC X(45).
+000039         FD  DIVERGENCIAS
+000040             RECORDING MODE IS F.
+000041             COPY CPDIVER.
+000001C       *================================================================*
+000002C       * CPDIVER  - DIVERGENCIA DA CONCILIACAO DE PAGAMENTOS            *
+000003C       * LRECL 80, RECFM FB.                                            *
+000004C       *================================================================*
+000005C        01  REG-DIVERGENCIA.
+000006C            05  DV-NUM-CARTAO-MASC     PIC X(16).
+000007C            05  DV-TIPO                PIC X(02).
+000008C                88  DV-PAGTO-SEM-FATURA          VALUE 'PS'.
+000009C                88  DV-FATURA-SEM-PAGTO          VALUE 'FS'.
+000010C                88  DV-PAGTO-A-MENOR             VALUE 'PM'.
+000011C            05  DV-VALOR-FATURA        PIC 9(09)V99.
+000012C            05  DV-VALOR-PAGO          PIC 9(09)V99.
+000013C            05  FILLER                 PIC X(40).
+000042
+000043         WORKING-STORAGE SECTION.
+000044         01  WS-FS-FATURA               PIC X(02).
+000045             88  WS-FS-FAT-OK                     VALUE '00'.
+000046             88  WS-FS-FAT-FIM                    VALUE '10'.
+000047         01  WS-FS-PAGTO                PIC X(02).
+000048             88  WS-FS-PAG-OK                     VALUE '00'.
+000049             88  WS-FS-PAG-FIM                    VALUE '10'.
+000050         01  WS-FS-DIVER                PIC X(02).
+000051             88  WS-FS-DIV-OK                     VALUE '00'.
+000052
+000053        *--- CHAVES DO BALANCE LINE: HIGH-VALUES QUANDO O ARQUIVO ACABA -*
+000054         01  WS-CHAVE-FATURA            PIC X(16).
+000055         01  WS-CHAVE-PAGTO             PIC X(16).
+000056
+000057        *--- ULTIMA CHAVE LIDA: CONFERE A ORDEM DOS ARQUIVOS DE ENTRADA -*
+000058         01  WS-CHAVE-FAT-ANT           PIC X(16) VALUE LOW-VALUES.
+000059         01  WS-CHAVE-PAG-ANT           PIC X(16) VALUE LOW-VALUES.
+000060
+000061         01  WS-CONTADORES.
+000062             05  WS-QTD-FAT-LIDAS       PIC 9(07) VALUE ZERO.
+000063             05  WS-QTD-PAG-LIDOS       PIC 9(07) VALUE ZERO.
+000064             05  WS-QTD-BAIXADAS        PIC 9(07) VALUE ZERO.
+000065             05  WS-QTD-PS              PIC 9(07) VALUE ZERO.
+000066             05  WS-QTD-FS              PIC 9(07) VALUE ZERO.
+000067             05  WS-QTD-PM              PIC 9(07) VALUE ZERO.
+000068
+000069         01  WS-CARTAO-ABERTO           PIC X(16).
+000070         01  WS-CARTAO-MASC             PIC X(16).
+000071
+000072         PROCEDURE DIVISION.
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0003
+
+LINE    PG/LN  A...B............................................................
+
+000073         0000-PRINCIPAL.
+000074             PERFORM 1000-INICIALIZAR THRU 1000-FIM-INICIALIZAR
+000075             PERFORM 2000-CONCILIAR   THRU 2000-FIM-CONCILIAR
+000076                UNTIL WS-CHAVE-FATURA = HIGH-VALUES
+000077                  AND WS-CHAVE-PAGTO  = HIGH-VALUES
+000078             PERFORM 3000-FINALIZAR   THRU 3000-FIM-FINALIZAR
+000079             STOP RUN.
+000080         0000-FIM-PRINCIPAL.
+000081             EXIT.
+000082
+000083         1000-INICIALIZAR.
+000084
+000085             OPEN INPUT FATURAS
+000086             IF NOT WS-FS-FAT-OK
+000087                DISPLAY 'FATCONCI - ERRO DE OPEN FATURAS (FATIN)'
+000088                DISPLAY 'FS: ' WS-FS-FATURA
+000089                PERFORM 9900-ENCERRAR-COM-ERRO
+000090                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000091             END-IF
+000092
+000093             OPEN INPUT PAGAMENTOS
+000094             IF NOT WS-FS-PAG-OK
+000095                DISPLAY 'FATCONCI - ERRO DE OPEN PAGAMENTOS (PAGIN)'
+000096                DISPLAY 'FS: ' WS-FS-PAGTO
+000097                PERFORM 9900-ENCERRAR-COM-ERRO
+000098                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000099             END-IF
+000100
+000101             OPEN OUTPUT DIVERGENCIAS
+000102             IF NOT WS-FS-DIV-OK
+000103                DISPLAY 'FATCONCI - ERRO DE OPEN DIVERGENCIAS (DIVEROUT)'
+000104                DISPLAY 'FS: ' WS-FS-DIVER
+000105                PERFORM 9900-ENCERRAR-COM-ERRO
+000106                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000107             END-IF
+000108
+000109             PERFORM 8100-LER-FATURA    THRU 8100-FIM-LER-FATURA
+000110             PERFORM 8200-LER-PAGAMENTO THRU 8200-FIM-LER-PAGAMENTO.
+000111
+000112         1000-FIM-INICIALIZAR.
+000113             EXIT.
+000114
+000115         2000-CONCILIAR.
+000116
+000117             EVALUATE TRUE
+000118                WHEN WS-CHAVE-FATURA = WS-CHAVE-PAGTO
+000119                   IF PG-VALOR < FT-VALOR
+000120                      MOVE SPACES TO REG-DIVERGENCIA
+000121                      SET DV-PAGTO-A-MENOR TO TRUE
+000122                      PERFORM 7000-GRAVAR-DIVERGENCIA
+000123                         THRU 7000-FIM-GRAVAR-DIVERGENCIA
+000124                      ADD 1 TO WS-QTD-PM
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0004
+
+LINE    PG/LN  A...B............................................................
+
+000125                   ELSE
+000126                      ADD 1 TO WS-QTD-BAIXADAS
+000127                   END-IF
+000128                   PERFORM 8100-LER-FATURA    THRU 8100-FIM-LER-FATURA
+000129                   PERFORM 8200-LER-PAGAMENTO THRU 8200-FIM-LER-PAGAMENTO
+000130                WHEN WS-CHAVE-FATURA < WS-CHAVE-PAGTO
+000131                   MOVE SPACES TO REG-DIVERGENCIA
+000132                   SET DV-FATURA-SEM-PAGTO TO TRUE
+000133                   PERFORM 7000-GRAVAR-DIVERGENCIA
+000134                      THRU 7000-FIM-GRAVAR-DIVERGENCIA
+000135                   ADD 1 TO WS-QTD-FS
+000136                   PERFORM 8100-LER-FATURA    THRU 8100-FIM-LER-FATURA
+000137                WHEN OTHER
+000138                   MOVE SPACES TO REG-DIVERGENCIA
+000139                   SET DV-PAGTO-SEM-FATURA TO TRUE
+000140                   PERFORM 7000-GRAVAR-DIVERGENCIA
+000141                      THRU 7000-FIM-GRAVAR-DIVERGENCIA
+000142                   ADD 1 TO WS-QTD-PS
+000143                   PERFORM 8200-LER-PAGAMENTO THRU 8200-FIM-LER-PAGAMENTO
+000144             END-EVALUATE.
+000145
+000146         2000-FIM-CONCILIAR.
+000147             EXIT.
+000148
+000149         3000-FINALIZAR.
+000150
+000151             CLOSE FATURAS
+000152             IF NOT WS-FS-FAT-OK
+000153                DISPLAY 'FATCONCI - ERRO DE CLOSE FATURAS (FATIN)'
+000154                DISPLAY 'FS: ' WS-FS-FATURA
+000155                PERFORM 9900-ENCERRAR-COM-ERRO
+000156                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000157             END-IF
+000158
+000159             CLOSE PAGAMENTOS
+000160             IF NOT WS-FS-PAG-OK
+000161                DISPLAY 'FATCONCI - ERRO DE CLOSE PAGAMENTOS (PAGIN)'
+000162                DISPLAY 'FS: ' WS-FS-PAGTO
+000163                PERFORM 9900-ENCERRAR-COM-ERRO
+000164                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000165             END-IF
+000166
+000167             CLOSE DIVERGENCIAS
+000168             IF NOT WS-FS-DIV-OK
+000169                DISPLAY 'FATCONCI - ERRO DE CLOSE DIVERGENCIAS (DIVEROUT)'
+000170                DISPLAY 'FS: ' WS-FS-DIVER
+000171                PERFORM 9900-ENCERRAR-COM-ERRO
+000172                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000173             END-IF
+000174
+000175             DISPLAY 'FATCONCI - FATURAS LIDAS .........: '
+000176                     WS-QTD-FAT-LIDAS
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0005
+
+LINE    PG/LN  A...B............................................................
+
+000177             DISPLAY 'FATCONCI - PAGAMENTOS LIDOS ......: '
+000178                     WS-QTD-PAG-LIDOS
+000179             DISPLAY 'FATCONCI - FATURAS BAIXADAS ......: '
+000180                     WS-QTD-BAIXADAS
+000181             DISPLAY 'FATCONCI - PAGAMENTO SEM FATURA ...: ' WS-QTD-PS
+000182             DISPLAY 'FATCONCI - FATURA SEM PAGAMENTO ...: ' WS-QTD-FS
+000183             DISPLAY 'FATCONCI - PAGAMENTO A MENOR ......: ' WS-QTD-PM
+000184
+000185        *    CONFERENCIA PELOS DOIS LADOS:
+000186        *    FATURAS    = BAIXADAS + A MENOR + SEM PAGAMENTO
+000187        *    PAGAMENTOS = BAIXADAS + A MENOR + SEM FATURA
+000188             IF WS-QTD-FAT-LIDAS NOT =
+000189                   WS-QTD-BAIXADAS + WS-QTD-PM + WS-QTD-FS
+000190             OR WS-QTD-PAG-LIDOS NOT =
+000191                   WS-QTD-BAIXADAS + WS-QTD-PM + WS-QTD-PS
+000192                DISPLAY 'FATCONCI - CONTADORES NAO FECHAM'
+000193                MOVE 16 TO RETURN-CODE
+000194             END-IF.
+000195
+000196         3000-FIM-FINALIZAR.
+000197             EXIT.
+000198
+000199         7000-GRAVAR-DIVERGENCIA.
+000200        *    O REGISTRO FOI LIMPO (MOVE SPACES, INCLUSIVE O FILLER) ANTES
+000201        *    DO SET DO TIPO, NO PARAGRAFO QUE CHAMOU ESTE.
+000202
+000203             IF DV-PAGTO-SEM-FATURA
+000204                MOVE PG-NUM-CARTAO TO WS-CARTAO-ABERTO
+000205                MOVE ZERO          TO DV-VALOR-FATURA
+000206                MOVE PG-VALOR      TO DV-VALOR-PAGO
+000207             ELSE
+000208                MOVE FT-NUM-CARTAO TO WS-CARTAO-ABERTO
+000209                MOVE FT-VALOR      TO DV-VALOR-FATURA
+000210                IF DV-PAGTO-A-MENOR
+000211                   MOVE PG-VALOR   TO DV-VALOR-PAGO
+000212                ELSE
+000213                   MOVE ZERO       TO DV-VALOR-PAGO
+000214                END-IF
+000215             END-IF
+000216             PERFORM 9800-MASCARAR-CARTAO
+000217             MOVE WS-CARTAO-MASC TO DV-NUM-CARTAO-MASC
+000218
+000219             WRITE REG-DIVERGENCIA
+000220             IF NOT WS-FS-DIV-OK
+000221                DISPLAY 'FATCONCI - ERRO DE WRITE DIVERGENCIAS (DIVEROUT)'
+000222                DISPLAY 'FS: ' WS-FS-DIVER
+000223                PERFORM 9900-ENCERRAR-COM-ERRO
+000224                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000225             END-IF.
+000226
+000227         7000-FIM-GRAVAR-DIVERGENCIA.
+000228             EXIT.
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0006
+
+LINE    PG/LN  A...B............................................................
+
+000229
+000230         8100-LER-FATURA.
+000231
+000232             READ FATURAS
+000233                  AT END
+000234                     MOVE HIGH-VALUES   TO WS-CHAVE-FATURA
+000235                  NOT AT END
+000236                     ADD 1              TO WS-QTD-FAT-LIDAS
+000237                     MOVE FT-NUM-CARTAO TO WS-CHAVE-FATURA
+000238                     IF WS-CHAVE-FATURA < WS-CHAVE-FAT-ANT
+000239                        DISPLAY 'FATCONCI - FATIN FORA DE ORDEM'
+000240                        DISPLAY 'REGISTRO NUMERO: ' WS-QTD-FAT-LIDAS
+000241                        PERFORM 9900-ENCERRAR-COM-ERRO
+000242                           THRU 9900-FIM-ENCERRAR-COM-ERRO
+000243                     END-IF
+000244                     MOVE WS-CHAVE-FATURA TO WS-CHAVE-FAT-ANT
+000245             END-READ
+000246
+000247             IF NOT WS-FS-FAT-OK AND NOT WS-FS-FAT-FIM
+000248                DISPLAY 'FATCONCI - ERRO DE READ FATURAS (FATIN)'
+000249                DISPLAY 'FS: ' WS-FS-FATURA
+000250                PERFORM 9900-ENCERRAR-COM-ERRO
+000251                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000252             END-IF.
+000253
+000254         8100-FIM-LER-FATURA.
+000255             EXIT.
+000256
+000257         8200-LER-PAGAMENTO.
+000258
+000259             READ PAGAMENTOS
+000260                  AT END
+000261                     MOVE HIGH-VALUES   TO WS-CHAVE-PAGTO
+000262                  NOT AT END
+000263                     ADD 1              TO WS-QTD-PAG-LIDOS
+000264                     MOVE PG-NUM-CARTAO TO WS-CHAVE-PAGTO
+000265                     IF WS-CHAVE-PAGTO < WS-CHAVE-PAG-ANT
+000266                        DISPLAY 'FATCONCI - PAGIN FORA DE ORDEM'
+000267                        DISPLAY 'REGISTRO NUMERO: ' WS-QTD-PAG-LIDOS
+000268                        PERFORM 9900-ENCERRAR-COM-ERRO
+000269                           THRU 9900-FIM-ENCERRAR-COM-ERRO
+000270                     END-IF
+000271                     MOVE WS-CHAVE-PAGTO TO WS-CHAVE-PAG-ANT
+000272             END-READ
+000273
+000274             IF NOT WS-FS-PAG-OK AND NOT WS-FS-PAG-FIM
+000275                DISPLAY 'FATCONCI - ERRO DE READ PAGAMENTOS (PAGIN)'
+000276                DISPLAY 'FS: ' WS-FS-PAGTO
+000277                PERFORM 9900-ENCERRAR-COM-ERRO
+000278                   THRU 9900-FIM-ENCERRAR-COM-ERRO
+000279             END-IF.
+000280
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0007
+
+LINE    PG/LN  A...B............................................................
+
+000281         8200-FIM-LER-PAGAMENTO.
+000282             EXIT.
+000283
+000284             COPY CPMASCAR.
+000001C       *================================================================*
+000002C       * CPMASCAR - PARAGRAFO DE MASCARAMENTO DO NUMERO DO CARTAO       *
+000003C       * REGRA DO MODULO: EXIBIR SOMENTE OS 6 PRIMEIROS E OS 4 ULTIMOS  *
+000004C       * DIGITOS. O PROGRAMA PRECISA DECLARAR WS-CARTAO-ABERTO E        *
+000005C       * WS-CARTAO-MASC (AMBOS PIC X(16)). USO: MOVE O NUMERO PARA      *
+000006C       * WS-CARTAO-ABERTO E PERFORM 9800-MASCARAR-CARTAO.               *
+000007C       *================================================================*
+000008C        9800-MASCARAR-CARTAO.
+000009C            MOVE WS-CARTAO-ABERTO          TO WS-CARTAO-MASC
+000010C            MOVE '******'                  TO WS-CARTAO-MASC(7:6)
+000011C            .
+000285
+000286         9900-ENCERRAR-COM-ERRO.
+000287        *    ENCERRA COM RC 16 PARA IMPEDIR OS STEPS SEGUINTES.
+000288             MOVE 16 TO RETURN-CODE
+000289             STOP RUN.
+000290         9900-FIM-ENCERRAR-COM-ERRO.
+000291             EXIT.
+warning: line not terminated by a newline
+
+
+GnuCOBOL 3.3-dev.0      sistema\work\FATCONC Mon Nov 09 2026 19:47:22  Page 0008
+
+Error/Warning summary:
+
+ALUNO.FATURA.COBOL(FATCONCI):291: warning: line not terminated by a newline
+
+1 warning in compilation group
+0 errors in compilation group
