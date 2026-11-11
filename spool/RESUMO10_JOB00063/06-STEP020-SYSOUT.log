@@ -1,0 +1,19 @@
+FATRESUM - INICIO DO PROCESSAMENTO
+======================================================
+ FATRESUM - RESUMO DAS DIVERGENCIAS DE FATURAS
+======================================================
+ TIPO      QTD        VALOR FATURA          VALOR PAGO
+------------------------------------------------------
+ PS          3                0,00            4.792,37
+ FS         13           32.059,28                0,00
+ PM          4            9.129,70            4.564,84
+------------------------------------------------------
+ TOTAL      20           41.188,98            9.357,21
+======================================================
+ REGISTROS LIDOS ...............:      20
+ REGISTROS DE TIPO INVALIDO ....:       0
+ CONFERENCIA PS+FS+PM = LIDOS ..: OK  
+ SALDO A RECEBER (FATURA-PAGO) .:         31.831,77 
+======================================================
+ LAST-CC = 0000
+FATRESUM - FIM DO PROCESSAMENTO

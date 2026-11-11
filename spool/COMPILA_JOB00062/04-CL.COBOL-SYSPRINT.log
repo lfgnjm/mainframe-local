@@ -1,0 +1,294 @@
+SIM031I COMPILACAO COM GNUCOBOL (-std=ibm), PROGRAMA FATRESUM (PRINCIPAL)
+
+ALUNO.FATURA.COBOL(FATRESUM):243: warning: line not terminated by a newline [-Wmissing-newline]
+  241 |            STOP RUN.
+  242 |        9000-FIM.
+  243 >            EXIT.<EOF>
+
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0001
+
+LINE    PG/LN  A...B............................................................
+
+000001         IDENTIFICATION DIVISION.
+000002         PROGRAM-ID. FATRESUM.
+000003        *================================================================*
+000004        * PROGRAMA : FATRESUM                                            *
+000005        * OBJETIVO : RESUMIR AS DIVERGENCIAS (FATURA.DIVERG) POR TIPO    *
+000006        *            PS / FS / PM, COM QTD, VLR FATURA E VLR PAGO.       *
+000007        * ENTRADA  : DD DIVERG  (LAYOUT COPYBOOK CPDIVER)                *
+000008        * SAIDA    : SYSOUT (DISPLAY)                                    *
+000009        * RETURN   : 0000 OK / 0004 ARQ. VAZIO / 0008 TOTAIS NAO BATEM / *
+000010        *            0012 ERRO DE I/O                                    *
+000011        *================================================================*
+000012         ENVIRONMENT DIVISION.
+000013         CONFIGURATION SECTION.
+000014         SPECIAL-NAMES.
+000015             DECIMAL-POINT IS COMMA.
+000016         INPUT-OUTPUT SECTION.
+000017         FILE-CONTROL.
+000018             SELECT ARQ-DIVERG ASSIGN TO DIVERG
+000019                 ORGANIZATION IS SEQUENTIAL
+000020                 ACCESS MODE  IS SEQUENTIAL
+000021                 FILE STATUS  IS WS-FS-DIVERG.
+000022
+000023         DATA DIVISION.
+000024         FILE SECTION.
+000025         FD  ARQ-DIVERG
+000026             RECORDING MODE IS F
+000027             BLOCK CONTAINS 0 RECORDS.
+000028             COPY CPDIVER.
+000001C       *================================================================*
+000002C       * CPDIVER  - DIVERGENCIA DA CONCILIACAO DE PAGAMENTOS            *
+000003C       * LRECL 80, RECFM FB.                                            *
+000004C       *================================================================*
+000005C        01  REG-DIVERGENCIA.
+000006C            05  DV-NUM-CARTAO-MASC     PIC X(16).
+000007C            05  DV-TIPO                PIC X(02).
+000008C                88  DV-PAGTO-SEM-FATURA          VALUE 'PS'.
+000009C                88  DV-FATURA-SEM-PAGTO          VALUE 'FS'.
+000010C                88  DV-PAGTO-A-MENOR             VALUE 'PM'.
+000011C            05  DV-VALOR-FATURA        PIC 9(09)V99.
+000012C            05  DV-VALOR-PAGO          PIC 9(09)V99.
+000013C            05  FILLER                 PIC X(40).
+000029
+000030         WORKING-STORAGE SECTION.
+000031         77  WS-FS-DIVERG             PIC X(02)  VALUE SPACES.
+000032         77  WS-MSG-ERRO              PIC X(30)  VALUE SPACES.
+000033         77  WS-LAST-CC               PIC 9(04)  VALUE ZEROS.
+000034         77  WS-SOMA-TIPOS            PIC 9(07)  VALUE ZEROS.
+000035         77  WS-STATUS-CONF           PIC X(04)  VALUE SPACES.
+000036         77  WS-FLAG-FIM              PIC X(01)  VALUE 'N'.
+000037             88  FIM-ARQUIVO                     VALUE 'S'.
+000038             88  NAO-FIM-ARQUIVO                 VALUE 'N'.
+000039
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0002
+
+LINE    PG/LN  A...B............................................................
+
+000040         01  WS-CONTADORES.
+000041             05  WS-TOTAL-LIDOS       PIC 9(07)  VALUE ZEROS.
+000042             05  WS-QTD-PS            PIC 9(07)  VALUE ZEROS.
+000043             05  WS-QTD-FS            PIC 9(07)  VALUE ZEROS.
+000044             05  WS-QTD-PM            PIC 9(07)  VALUE ZEROS.
+000045             05  WS-QTD-OUTROS        PIC 9(07)  VALUE ZEROS.
+000046
+000047         01  WS-ACUMULADORES.
+000048             05  WS-FAT-PS            PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000049             05  WS-PAGO-PS           PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000050             05  WS-FAT-FS            PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000051             05  WS-PAGO-FS           PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000052             05  WS-FAT-PM            PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000053             05  WS-PAGO-PM           PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000054             05  WS-FAT-TOTAL         PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000055             05  WS-PAGO-TOTAL        PIC 9(11)V99 COMP-3 VALUE ZEROS.
+000056             05  WS-SALDO-RECEBER     PIC S9(11)V99 COMP-3 VALUE ZEROS.
+000057
+000058         01  WS-EDICAO.
+000059             05  ED-QTD               PIC ZZZ.ZZ9.
+000060             05  ED-VLR               PIC ZZ.ZZZ.ZZZ.ZZ9,99.
+000061             05  ED-SALDO             PIC ZZ.ZZZ.ZZZ.ZZ9,99-.
+000062
+000063         01  WS-LINHA-IGUAL           PIC X(54)  VALUE ALL '='.
+000064         01  WS-LINHA-TRACO           PIC X(54)  VALUE ALL '-'.
+000065
+000066         01  WS-CAB-COLUNAS.
+000067             05  FILLER               PIC X(07)  VALUE ' TIPO  '.
+000068             05  FILLER               PIC X(04)  VALUE SPACES.
+000069             05  FILLER               PIC X(03)  VALUE 'QTD'.
+000070             05  FILLER               PIC X(08)  VALUE SPACES.
+000071             05  FILLER               PIC X(12)  VALUE 'VALOR FATURA'.
+000072             05  FILLER               PIC X(10)  VALUE SPACES.
+000073             05  FILLER               PIC X(10)  VALUE 'VALOR PAGO'.
+000074
+000075         01  WS-LINHA-DET.
+000076             05  FILLER               PIC X(01)  VALUE SPACE.
+000077             05  DET-TIPO             PIC X(05)  VALUE SPACES.
+000078             05  FILLER               PIC X(01)  VALUE SPACE.
+000079             05  DET-QTD              PIC ZZZ.ZZ9.
+000080             05  FILLER               PIC X(03)  VALUE SPACES.
+000081             05  DET-VLR-FATURA       PIC ZZ.ZZZ.ZZZ.ZZ9,99.
+000082             05  FILLER               PIC X(03)  VALUE SPACES.
+000083             05  DET-VLR-PAGO         PIC ZZ.ZZZ.ZZZ.ZZ9,99.
+000084
+000085        *================================================================*
+000086         PROCEDURE DIVISION.
+000087        *================================================================*
+000088         0000-PRINCIPAL.
+000089             PERFORM 1000-INICIALIZAR THRU 1000-FIM.
+000090             PERFORM 2000-PROCESSAR   THRU 2000-FIM
+000091                 UNTIL FIM-ARQUIVO.
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0003
+
+LINE    PG/LN  A...B............................................................
+
+000092             PERFORM 3000-FINALIZAR   THRU 3000-FIM.
+000093             MOVE WS-LAST-CC TO RETURN-CODE.
+000094             STOP RUN.
+000095
+000096        *----------------------------------------------------------------*
+000097        * BLOCO 1 - INICIALIZACAO                                        *
+000098        *----------------------------------------------------------------*
+000099         1000-INICIALIZAR.
+000100             DISPLAY 'FATRESUM - INICIO DO PROCESSAMENTO'.
+000101             OPEN INPUT ARQ-DIVERG.
+000102             IF WS-FS-DIVERG NOT = '00'
+000103                MOVE 'ERRO NO OPEN DO DIVERG' TO WS-MSG-ERRO
+000104                PERFORM 9000-ABORTAR THRU 9000-FIM
+000105             END-IF.
+000106             PERFORM 2100-LER-DIVERG THRU 2100-FIM.
+000107         1000-FIM.
+000108             EXIT.
+000109
+000110        *----------------------------------------------------------------*
+000111        * BLOCO 2 - PROCESSAMENTO (AGRUPAMENTO POR TIPO)                 *
+000112        *----------------------------------------------------------------*
+000113         2000-PROCESSAR.
+000114             ADD 1 TO WS-TOTAL-LIDOS.
+000115             EVALUATE TRUE
+000116                 WHEN DV-PAGTO-SEM-FATURA
+000117                      ADD 1              TO WS-QTD-PS
+000118                      ADD DV-VALOR-FATURA TO WS-FAT-PS
+000119                      ADD DV-VALOR-PAGO  TO WS-PAGO-PS
+000120                 WHEN DV-FATURA-SEM-PAGTO
+000121                      ADD 1              TO WS-QTD-FS
+000122                      ADD DV-VALOR-FATURA TO WS-FAT-FS
+000123                      ADD DV-VALOR-PAGO  TO WS-PAGO-FS
+000124                 WHEN DV-PAGTO-A-MENOR
+000125                      ADD 1              TO WS-QTD-PM
+000126                      ADD DV-VALOR-FATURA TO WS-FAT-PM
+000127                      ADD DV-VALOR-PAGO  TO WS-PAGO-PM
+000128                 WHEN OTHER
+000129                      ADD 1              TO WS-QTD-OUTROS
+000130                      MOVE WS-TOTAL-LIDOS TO ED-QTD
+000131                      DISPLAY 'AVISO: TIPO INVALIDO NO REGISTRO ' ED-QTD
+000132             END-EVALUATE.
+000133             PERFORM 2100-LER-DIVERG THRU 2100-FIM.
+000134         2000-FIM.
+000135             EXIT.
+000136
+000137         2100-LER-DIVERG.
+000138             READ ARQ-DIVERG
+000139                 AT END
+000140                    SET FIM-ARQUIVO TO TRUE
+000141             END-READ.
+000142             EVALUATE WS-FS-DIVERG
+000143                 WHEN '00'
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0004
+
+LINE    PG/LN  A...B............................................................
+
+000144                      CONTINUE
+000145                 WHEN '10'
+000146                      SET FIM-ARQUIVO TO TRUE
+000147                 WHEN OTHER
+000148                      MOVE 'ERRO NA LEITURA DO DIVERG' TO WS-MSG-ERRO
+000149                      PERFORM 9000-ABORTAR THRU 9000-FIM
+000150             END-EVALUATE.
+000151         2100-FIM.
+000152             EXIT.
+000153
+000154        *----------------------------------------------------------------*
+000155        * BLOCO 3 - FINALIZACAO                                          *
+000156        *----------------------------------------------------------------*
+000157         3000-FINALIZAR.
+000158             CLOSE ARQ-DIVERG.
+000159             IF WS-FS-DIVERG NOT = '00'
+000160                MOVE 'ERRO NO CLOSE DO DIVERG' TO WS-MSG-ERRO
+000161                PERFORM 9000-ABORTAR THRU 9000-FIM
+000162             END-IF.
+000163             PERFORM 3100-CALCULAR-TOTAIS THRU 3100-FIM.
+000164             PERFORM 3200-EXIBIR-RESUMO   THRU 3200-FIM.
+000165         3000-FIM.
+000166             EXIT.
+000167
+000168         3100-CALCULAR-TOTAIS.
+000169             COMPUTE WS-FAT-TOTAL  = WS-FAT-PS  + WS-FAT-FS
+000170                                   + WS-FAT-PM.
+000171             COMPUTE WS-PAGO-TOTAL = WS-PAGO-PS + WS-PAGO-FS
+000172                                   + WS-PAGO-PM.
+000173             COMPUTE WS-SALDO-RECEBER = WS-FAT-TOTAL - WS-PAGO-TOTAL.
+000174             COMPUTE WS-SOMA-TIPOS = WS-QTD-PS + WS-QTD-FS + WS-QTD-PM.
+000175             IF WS-SOMA-TIPOS = WS-TOTAL-LIDOS
+000176                MOVE 'OK  ' TO WS-STATUS-CONF
+000177             ELSE
+000178                MOVE 'ERRO' TO WS-STATUS-CONF
+000179                MOVE 8      TO WS-LAST-CC
+000180             END-IF.
+000181             IF WS-TOTAL-LIDOS = ZEROS AND WS-LAST-CC = ZEROS
+000182                MOVE 4 TO WS-LAST-CC
+000183             END-IF.
+000184         3100-FIM.
+000185             EXIT.
+000186
+000187         3200-EXIBIR-RESUMO.
+000188             DISPLAY WS-LINHA-IGUAL.
+000189             DISPLAY ' FATRESUM - RESUMO DAS DIVERGENCIAS DE FATURAS'.
+000190             DISPLAY WS-LINHA-IGUAL.
+000191             DISPLAY WS-CAB-COLUNAS.
+000192             DISPLAY WS-LINHA-TRACO.
+000193
+000194             MOVE 'PS'         TO DET-TIPO.
+000195             MOVE WS-QTD-PS    TO DET-QTD.
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0005
+
+LINE    PG/LN  A...B............................................................
+
+000196             MOVE WS-FAT-PS    TO DET-VLR-FATURA.
+000197             MOVE WS-PAGO-PS   TO DET-VLR-PAGO.
+000198             DISPLAY WS-LINHA-DET.
+000199
+000200             MOVE 'FS'         TO DET-TIPO.
+000201             MOVE WS-QTD-FS    TO DET-QTD.
+000202             MOVE WS-FAT-FS    TO DET-VLR-FATURA.
+000203             MOVE WS-PAGO-FS   TO DET-VLR-PAGO.
+000204             DISPLAY WS-LINHA-DET.
+000205
+000206             MOVE 'PM'         TO DET-TIPO.
+000207             MOVE WS-QTD-PM    TO DET-QTD.
+000208             MOVE WS-FAT-PM    TO DET-VLR-FATURA.
+000209             MOVE WS-PAGO-PM   TO DET-VLR-PAGO.
+000210             DISPLAY WS-LINHA-DET.
+000211
+000212             DISPLAY WS-LINHA-TRACO.
+000213             MOVE 'TOTAL'          TO DET-TIPO.
+000214             MOVE WS-SOMA-TIPOS    TO DET-QTD.
+000215             MOVE WS-FAT-TOTAL     TO DET-VLR-FATURA.
+000216             MOVE WS-PAGO-TOTAL    TO DET-VLR-PAGO.
+000217             DISPLAY WS-LINHA-DET.
+000218             DISPLAY WS-LINHA-IGUAL.
+000219
+000220             MOVE WS-TOTAL-LIDOS   TO ED-QTD.
+000221             DISPLAY ' REGISTROS LIDOS ...............: ' ED-QTD.
+000222             MOVE WS-QTD-OUTROS    TO ED-QTD.
+000223             DISPLAY ' REGISTROS DE TIPO INVALIDO ....: ' ED-QTD.
+000224             DISPLAY ' CONFERENCIA PS+FS+PM = LIDOS ..: ' WS-STATUS-CONF.
+000225             MOVE WS-SALDO-RECEBER TO ED-SALDO.
+000226             DISPLAY ' SALDO A RECEBER (FATURA-PAGO) .: ' ED-SALDO.
+000227             DISPLAY WS-LINHA-IGUAL.
+000228             DISPLAY ' LAST-CC = ' WS-LAST-CC.
+000229             DISPLAY 'FATRESUM - FIM DO PROCESSAMENTO'.
+000230         3200-FIM.
+000231             EXIT.
+000232
+000233        *----------------------------------------------------------------*
+000234        * ABORT PADRAO PARA ERRO DE I/O                                  *
+000235        *----------------------------------------------------------------*
+000236         9000-ABORTAR.
+000237             DISPLAY '*** ' WS-MSG-ERRO ' - FILE STATUS: ' WS-FS-DIVERG.
+000238             MOVE 12 TO WS-LAST-CC.
+000239             DISPLAY ' LAST-CC = ' WS-LAST-CC.
+000240             MOVE WS-LAST-CC TO RETURN-CODE.
+000241             STOP RUN.
+000242         9000-FIM.
+000243             EXIT.
+warning: line not terminated by a newline
+
+
+GnuCOBOL 3.3-dev.0      sistema\work\FATRESU Tue Nov 10 2026 16:10:50  Page 0006
+
+Error/Warning summary:
+
+ALUNO.FATURA.COBOL(FATRESUM):243: warning: line not terminated by a newline
+
+1 warning in compilation group
+0 errors in compilation group

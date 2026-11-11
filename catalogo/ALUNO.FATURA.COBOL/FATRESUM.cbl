@@ -113,18 +113,18 @@
        2000-PROCESSAR.
            ADD 1 TO WS-TOTAL-LIDOS.
            EVALUATE TRUE
-               WHEN DIV-PS
+               WHEN DV-PAGTO-SEM-FATURA
                     ADD 1              TO WS-QTD-PS
-                    ADD DIV-VLR-FATURA TO WS-FAT-PS
-                    ADD DIV-VLR-PAGO   TO WS-PAGO-PS
-               WHEN DIV-FS
+                    ADD DV-VALOR-FATURA TO WS-FAT-PS
+                    ADD DV-VALOR-PAGO  TO WS-PAGO-PS
+               WHEN DV-FATURA-SEM-PAGTO
                     ADD 1              TO WS-QTD-FS
-                    ADD DIV-VLR-FATURA TO WS-FAT-FS
-                    ADD DIV-VLR-PAGO   TO WS-PAGO-FS
-               WHEN DIV-PM
+                    ADD DV-VALOR-FATURA TO WS-FAT-FS
+                    ADD DV-VALOR-PAGO  TO WS-PAGO-FS
+               WHEN DV-PAGTO-A-MENOR
                     ADD 1              TO WS-QTD-PM
-                    ADD DIV-VLR-FATURA TO WS-FAT-PM
-                    ADD DIV-VLR-PAGO   TO WS-PAGO-PM
+                    ADD DV-VALOR-FATURA TO WS-FAT-PM
+                    ADD DV-VALOR-PAGO  TO WS-PAGO-PM
                WHEN OTHER
                     ADD 1              TO WS-QTD-OUTROS
                     MOVE WS-TOTAL-LIDOS TO ED-QTD
